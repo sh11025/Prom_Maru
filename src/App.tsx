@@ -28,6 +28,36 @@ import { PromptTemplate } from './constants/templates';
 const STORAGE_KEY = 'prom_maru_history_v1';
 const USER_KEY_STORAGE = 'prom_maru_user_gemini_key';
 
+// Safely read and validate history from localStorage
+const loadHistoryFromStorage = (): PromptHistoryItem[] => {
+  try {
+    if (typeof window === 'undefined' || !window.localStorage) return [];
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (!saved) return [];
+    const parsed = JSON.parse(saved);
+    if (Array.isArray(parsed)) {
+      return parsed.filter(
+        (item): item is PromptHistoryItem =>
+          Boolean(item && typeof item === 'object' && typeof item.promptEn === 'string')
+      );
+    }
+    return [];
+  } catch (e) {
+    console.error('Failed to load history from localStorage', e);
+    return [];
+  }
+};
+
+// Safely persist history to localStorage
+const saveHistoryToStorage = (items: PromptHistoryItem[]) => {
+  try {
+    if (typeof window === 'undefined' || !window.localStorage) return;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+  } catch (e) {
+    console.error('Failed to save history to localStorage', e);
+  }
+};
+
 export default function App() {
   // Input parameters (Preserved across "새 프롬프트")
   const [resultLanguage, setResultLanguage] = useState<string>('한국어');
@@ -55,16 +85,10 @@ export default function App() {
   // Function reference for "다시 시도" (Retry)
   const lastActionRef = useRef<(() => Promise<void>) | null>(null);
 
-  // History state
-  const [history, setHistory] = useState<PromptHistoryItem[]>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
-  });
+  // History state (initialized safely from localStorage)
+  const [history, setHistory] = useState<PromptHistoryItem[]>(loadHistoryFromStorage);
   const [isCurrentSaved, setIsCurrentSaved] = useState<boolean>(false);
+  const isInitialMount = useRef<boolean>(true);
 
   // Modals state
   const [isTemplatesOpen, setIsTemplatesOpen] = useState<boolean>(false);
@@ -92,13 +116,13 @@ export default function App() {
     }
   }, []);
 
-  // Save history to localStorage
+  // Sync history to localStorage on subsequent updates (guards against initial mount overwriting with empty array)
   useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(history));
-    } catch (e) {
-      console.error('Failed to save history to localStorage', e);
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
     }
+    saveHistoryToStorage(history);
   }, [history]);
 
   // Handle saving API Key to state and localStorage
@@ -432,6 +456,19 @@ export default function App() {
     if (!response || !response.prompt_en) return;
     if (isCurrentSaved) return;
 
+    const trimmedPromptEn = response.prompt_en.trim();
+
+    // 동일한 promptEn 중복 저장 방지 (현재 state 및 localStorage 검사)
+    const stored = loadHistoryFromStorage();
+    const isDuplicate =
+      history.some((item) => item.promptEn && item.promptEn.trim() === trimmedPromptEn) ||
+      stored.some((item) => item.promptEn && item.promptEn.trim() === trimmedPromptEn);
+
+    if (isDuplicate) {
+      setIsCurrentSaved(true);
+      return;
+    }
+
     const newItem: PromptHistoryItem = {
       id: `pm_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       createdAt: Date.now(),
@@ -447,7 +484,10 @@ export default function App() {
       elements: response.elements,
     };
 
-    setHistory((prev) => [newItem, ...prev]);
+    // 상태 업데이트 및 localStorage 즉시 동기화
+    const nextHistory = [newItem, ...history.filter((h) => h.promptEn.trim() !== trimmedPromptEn)];
+    setHistory(nextHistory);
+    saveHistoryToStorage(nextHistory);
     setIsCurrentSaved(true);
   };
 
@@ -469,12 +509,17 @@ export default function App() {
   };
 
   const handleDeleteHistoryItem = (id: string) => {
-    setHistory((prev) => prev.filter((item) => item.id !== id));
+    setHistory((prev) => {
+      const next = prev.filter((item) => item.id !== id);
+      saveHistoryToStorage(next);
+      return next;
+    });
   };
 
   const handleClearAllHistory = () => {
     if (window.confirm('저장된 모든 프롬프트 기록을 삭제하시겠습니까?')) {
       setHistory([]);
+      saveHistoryToStorage([]);
     }
   };
 

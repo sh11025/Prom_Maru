@@ -1,6 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
-  Sparkles,
   BookOpen,
   History,
   RotateCcw,
@@ -9,6 +8,7 @@ import {
   Menu,
   X,
 } from 'lucide-react';
+import { APP_ICON_PATH } from '../constants/assets';
 
 interface HeaderProps {
   onOpenGuide: () => void;
@@ -59,8 +59,12 @@ export const Header: React.FC<HeaderProps> = ({
           }}
           title="처음으로 이동"
         >
-          <div className="w-9 h-9 rounded-xl bg-[#7C3AED] text-white flex items-center justify-center shadow-xs group-hover:bg-[#6D28D9] transition-colors shrink-0">
-            <Sparkles className="w-4.5 h-4.5 text-white" />
+          <div className="w-9 h-9 rounded-xl overflow-hidden shadow-2xs group-hover:scale-[1.03] transition-transform shrink-0 flex items-center justify-center">
+            <img
+              src={APP_ICON_PATH}
+              alt="Prom_Maru 로고"
+              className="w-full h-full object-contain"
+            />
           </div>
           <div className="flex items-center gap-2">
             <span className="font-extrabold text-lg text-[#1F2937] tracking-tight">

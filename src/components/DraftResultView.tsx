@@ -115,7 +115,15 @@ ${response.review || ''}
   };
 
   const handleUseAsIs = () => {
-    navigator.clipboard.writeText(response.prompt_en);
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(response.prompt_en).catch((err) => {
+          console.warn('Clipboard writeText failed:', err);
+        });
+      }
+    } catch (e) {
+      console.warn('Clipboard access error:', e);
+    }
     setCopiedEn(true);
     setIsConfirmed(true);
     onSaveToHistory();
@@ -355,13 +363,13 @@ ${response.review || ''}
               type="button"
               onClick={handleUseAsIs}
               className={`w-full py-3.5 px-4 rounded-2xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all cursor-pointer min-h-[48px] ${
-                isConfirmed
+                isConfirmed || isSaved
                   ? 'bg-emerald-50 border-2 border-emerald-500 text-emerald-800'
                   : 'bg-[#7C3AED] hover:bg-[#6D28D9] text-white shadow-xs active:scale-[0.99]'
               }`}
               title="영문 프롬프트를 복사하고 히스토리에 보관"
             >
-              <CheckCircle className={`w-4 h-4 ${isConfirmed ? 'text-emerald-700' : 'text-white'}`} />
+              <CheckCircle className={`w-4 h-4 ${isConfirmed || isSaved ? 'text-emerald-700' : 'text-white'}`} />
               <span>[ 이대로 사용 ]</span>
             </button>
 
